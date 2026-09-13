@@ -33,8 +33,15 @@ export const AdminDashboardPage: React.FC = () => {
   const [allExpenses, setAllExpenses] = useState<MockExpense[]>([]);
 
   useEffect(() => {
-    setAllBills(billingService.getBills());
-    setAllExpenses(expenseService.getExpenses());
+    const loadData = async () => {
+      const [bills, expenses] = await Promise.all([
+        billingService.getBills(),
+        expenseService.getExpenses()
+      ]);
+      setAllBills(bills);
+      setAllExpenses(expenses);
+    };
+    loadData();
   }, []);
 
   const { stats, expStats, chartData, workerPerf, topCategories, monthSummary } = useMemo(() => {

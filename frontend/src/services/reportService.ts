@@ -5,8 +5,6 @@ import { calcWorkerPerformance } from '../utils/analytics';
 
 export type ReportDateRange = 'today' | 'yesterday' | '7days' | 'month' | 'lastMonth' | 'last3Months' | 'custom';
 
-// For custom ranges, we need to extend analytics.ts or handle it here.
-// Let's implement a custom filter here that handles all date ranges including custom.
 export function getDateBoundaries(range: ReportDateRange, customFrom?: string, customTo?: string): { start: number, end: number } {
   const now = new Date();
   let start = 0;
@@ -49,16 +47,16 @@ export function getDateBoundaries(range: ReportDateRange, customFrom?: string, c
   return { start, end };
 }
 
-function getFilteredData(range: ReportDateRange, customFrom?: string, customTo?: string) {
+async function getFilteredData(range: ReportDateRange, customFrom?: string, customTo?: string) {
   const { start, end } = getDateBoundaries(range, customFrom, customTo);
   
-  const allBills = billingService.getBills();
+  const allBills = await billingService.getBills();
   const bills = allBills.filter(b => {
     const t = new Date(b.createdAt).getTime();
     return t >= start && t <= end;
   });
 
-  const allExpenses = expenseService.getExpenses();
+  const allExpenses = await expenseService.getExpenses();
   const expenses = allExpenses.filter(e => {
     const t = new Date(e.expenseDate).getTime();
     return t >= start && t <= end;
@@ -68,8 +66,8 @@ function getFilteredData(range: ReportDateRange, customFrom?: string, customTo?:
 }
 
 export const reportService = {
-  getSalesReport(range: ReportDateRange, customFrom?: string, customTo?: string, paymentMethod?: string, workerId?: string) {
-    let { bills } = getFilteredData(range, customFrom, customTo);
+  async getSalesReport(range: ReportDateRange, customFrom?: string, customTo?: string, paymentMethod?: string, workerId?: string) {
+    let { bills } = await getFilteredData(range, customFrom, customTo);
     
     if (paymentMethod && paymentMethod !== 'ALL') {
       bills = bills.filter(b => b.paymentMethod === paymentMethod);
@@ -88,8 +86,8 @@ export const reportService = {
     return { bills, totalSales, totalBills, averageBill };
   },
 
-  getExpenseReport(range: ReportDateRange, customFrom?: string, customTo?: string, category?: string) {
-    let { expenses } = getFilteredData(range, customFrom, customTo);
+  async getExpenseReport(range: ReportDateRange, customFrom?: string, customTo?: string, category?: string) {
+    let { expenses } = await getFilteredData(range, customFrom, customTo);
     
     if (category && category !== 'ALL') {
       expenses = expenses.filter(e => e.category === category);
@@ -126,8 +124,8 @@ export const reportService = {
     return { expenses, totalExpenses, numberOfExpenses, averageExpense, categoryBreakdown };
   },
 
-  getPaymentReport(range: ReportDateRange, customFrom?: string, customTo?: string) {
-    const { bills } = getFilteredData(range, customFrom, customTo);
+  async getPaymentReport(range: ReportDateRange, customFrom?: string, customTo?: string) {
+    const { bills } = await getFilteredData(range, customFrom, customTo);
     
     let cashSales = 0;
     let upiSales = 0;
@@ -145,9 +143,9 @@ export const reportService = {
     return { cashSales, upiSales, totalSales, cashPercent, upiPercent };
   },
 
-  getWorkerReport(range: ReportDateRange, customFrom?: string, customTo?: string) {
-    const { bills } = getFilteredData(range, customFrom, customTo);
-    const workers = workerService.getWorkers();
+  async getWorkerReport(range: ReportDateRange, customFrom?: string, customTo?: string) {
+    const { bills } = await getFilteredData(range, customFrom, customTo);
+    const workers = await workerService.getWorkers();
     
     const perf = calcWorkerPerformance(bills);
     
@@ -175,8 +173,8 @@ export const reportService = {
     return { workerPerformance: result };
   },
 
-  getFinancialSummary(range: ReportDateRange, customFrom?: string, customTo?: string) {
-    const { bills, expenses } = getFilteredData(range, customFrom, customTo);
+  async getFinancialSummary(range: ReportDateRange, customFrom?: string, customTo?: string) {
+    const { bills, expenses } = await getFilteredData(range, customFrom, customTo);
     
     let totalSales = 0;
     let cashSales = 0;
@@ -206,14 +204,12 @@ export const reportService = {
     };
   },
 
-  getSalesVsExpenses(range: ReportDateRange, customFrom?: string, customTo?: string) {
+  async getSalesVsExpenses(range: ReportDateRange, customFrom?: string, customTo?: string) {
     const { start, end } = getDateBoundaries(range, customFrom, customTo);
-    const { bills, expenses } = getFilteredData(range, customFrom, customTo);
+    const { bills, expenses } = await getFilteredData(range, customFrom, customTo);
     
     const map = new Map<string, { sales: number, expenses: number }>();
     
-    // For custom/long ranges, we group by date
-    // We generate all dates in range (if range < 90 days) to avoid gaps
     const MAX_DAYS = 90;
     const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
     

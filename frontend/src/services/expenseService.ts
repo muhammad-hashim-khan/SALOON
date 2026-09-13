@@ -1,111 +1,140 @@
+import { supabase } from '../lib/supabase';
 import { MockExpense, ExpenseCategory } from '../types/expense';
-import { seedMockExpenses, EXPENSES_STORAGE_KEY } from '../mock/mockExpenses';
-import { generateId } from '../utils/money';
-
-// ─── Internal helpers ─────────────────────────────────────────────────────────
-
-function loadAllExpenses(): MockExpense[] {
-  try {
-    const raw = localStorage.getItem(EXPENSES_STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as MockExpense[];
-  } catch {
-    return [];
-  }
-}
-
-function saveAllExpenses(expenses: MockExpense[]): void {
-  localStorage.setItem(EXPENSES_STORAGE_KEY, JSON.stringify(expenses));
-}
-
-function seedIfEmpty(): void {
-  const existing = loadAllExpenses();
-  if (existing.length === 0) {
-    saveAllExpenses(seedMockExpenses);
-  }
-}
-
-// Initialize on import
-seedIfEmpty();
-
-// ─── Public API ───────────────────────────────────────────────────────────────
 
 export const expenseService = {
-  getExpenses(): MockExpense[] {
-    return loadAllExpenses().sort((a, b) => {
-      // Sort by expense date descending, then created at descending
-      if (b.expenseDate !== a.expenseDate) {
-        return b.expenseDate.localeCompare(a.expenseDate);
-      }
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
+  async getExpenses(): Promise<MockExpense[]> {
+    const { data, error } = await supabase
+      .from('expenses')
+      .select('*')
+      .order('expense_date', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (error || !data) return [];
+
+    return data.map((e: any) => ({
+      id: e.id,
+      category: e.category as ExpenseCategory,
+      description: e.description,
+      amount: e.amount,
+      expenseDate: e.expense_date,
+      createdBy: e.created_by,
+      createdAt: e.created_at,
+      updatedAt: e.updated_at,
+    }));
   },
 
-  getExpenseById(id: string): MockExpense | null {
-    return loadAllExpenses().find((e) => e.id === id) || null;
+  async getExpenseById(id: string): Promise<MockExpense | null> {
+    const { data, error } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error || !data) return null;
+
+    return {
+      id: data.id,
+      category: data.category as ExpenseCategory,
+      description: data.description,
+      amount: data.amount,
+      expenseDate: data.expense_date,
+      createdBy: data.created_by,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
   },
 
-  createExpense(data: {
+  async createExpense(data: {
     category: ExpenseCategory;
     description: string;
     amount: number;
     expenseDate: string;
     createdBy: string;
-  }): MockExpense {
-    const now = new Date().toISOString();
-    const newExpense: MockExpense = {
-      id: generateId(),
-      category: data.category,
-      description: data.description.trim(),
-      amount: data.amount,
-      expenseDate: data.expenseDate,
-      createdBy: data.createdBy,
-      createdAt: now,
-      updatedAt: now,
-    };
+  }): Promise<{ success: boolean; expense?: MockExpense; error?: string }> {
+    try {
+      const { data: e, error } = await supabase
+        .from('expenses')
+        .insert({
+          category: data.category,
+          description: data.description.trim(),
+          amount: data.amount,
+          expense_date: data.expenseDate,
+          created_by: data.createdBy,
+        })
+        .select()
+        .single();
 
-    const all = loadAllExpenses();
-    saveAllExpenses([newExpense, ...all]);
-    return newExpense;
+      if (error) throw error;
+
+      return {
+        success: true,
+        expense: {
+          id: e.id,
+          category: e.category as ExpenseCategory,
+          description: e.description,
+          amount: e.amount,
+          expenseDate: e.expense_date,
+          createdBy: e.created_by,
+          createdAt: e.created_at,
+          updatedAt: e.updated_at,
+        },
+      };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to create expense.' };
+    }
   },
 
-  updateExpense(id: string, data: {
+  async updateExpense(id: string, data: {
     category?: ExpenseCategory;
     description?: string;
     amount?: number;
     expenseDate?: string;
-  }): { success: boolean; expense?: MockExpense; error?: string } {
-    const all = loadAllExpenses();
-    const idx = all.findIndex((e) => e.id === id);
-    
-    if (idx === -1) {
-      return { success: false, error: 'Expense not found.' };
+  }): Promise<{ success: boolean; expense?: MockExpense; error?: string }> {
+    try {
+      const updateData: any = {};
+      if (data.category) updateData.category = data.category;
+      if (data.description !== undefined) updateData.description = data.description.trim();
+      if (data.amount !== undefined) updateData.amount = data.amount;
+      if (data.expenseDate) updateData.expense_date = data.expenseDate;
+
+      const { data: e, error } = await supabase
+        .from('expenses')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return {
+        success: true,
+        expense: {
+          id: e.id,
+          category: e.category as ExpenseCategory,
+          description: e.description,
+          amount: e.amount,
+          expenseDate: e.expense_date,
+          createdBy: e.created_by,
+          createdAt: e.created_at,
+          updatedAt: e.updated_at,
+        },
+      };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to update expense.' };
     }
-
-    const current = all[idx];
-    const updated: MockExpense = {
-      ...current,
-      category: data.category || current.category,
-      description: data.description !== undefined ? data.description.trim() : current.description,
-      amount: data.amount !== undefined ? data.amount : current.amount,
-      expenseDate: data.expenseDate || current.expenseDate,
-      updatedAt: new Date().toISOString(),
-    };
-
-    all[idx] = updated;
-    saveAllExpenses(all);
-    return { success: true, expense: updated };
   },
 
-  deleteExpense(id: string): { success: boolean; error?: string } {
-    const all = loadAllExpenses();
-    const filtered = all.filter((e) => e.id !== id);
-    
-    if (filtered.length === all.length) {
-      return { success: false, error: 'Expense not found.' };
+  async deleteExpense(id: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to delete expense.' };
     }
-    
-    saveAllExpenses(filtered);
-    return { success: true };
   }
 };

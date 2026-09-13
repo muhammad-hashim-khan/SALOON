@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -21,7 +21,11 @@ export const Sidebar: React.FC = () => {
   const { profile, role, logout } = useAuth();
   const navigate = useNavigate();
   const isAdmin = role === 'ADMIN';
-  const settings = settingsService.getSettings();
+  const [settings, setSettings] = useState({ salonName: 'CUT&STYLE', businessName: 'SALON & SPA' });
+
+  useEffect(() => {
+    settingsService.getSettings().then(s => setSettings(s));
+  }, []);
 
   const handleLogout = async () => {
     await logout();

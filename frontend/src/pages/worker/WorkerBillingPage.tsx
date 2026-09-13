@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -54,6 +54,11 @@ export const WorkerBillingPage: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
+  const [nextBillNumber, setNextBillNumber] = useState('...');
+
+  useEffect(() => {
+    billingService.peekNextBillNumber().then(setNextBillNumber);
+  }, []);
 
   // ── Money maths (all in paise) ──────────────────────────────────────────────
 
@@ -143,7 +148,7 @@ export const WorkerBillingPage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const bill = billingService.createBill({
+      const bill = await billingService.createBill({
         workerId: user.id,
         workerName: user.fullName,
         customerName,
@@ -184,7 +189,7 @@ export const WorkerBillingPage: React.FC = () => {
       <div className="pb-2 border-b border-white/10">
         <h1 className="text-2xl font-bold text-white tracking-tight">New Bill</h1>
         <p className="text-sm text-gray-400 mt-0.5">
-          Next bill: <span className="font-mono text-[#c5a880]">{billingService.peekNextBillNumber()}</span>
+          Next bill: <span className="font-mono text-[#c5a880]">{nextBillNumber}</span>
         </p>
       </div>
 

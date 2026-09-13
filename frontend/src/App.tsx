@@ -4,12 +4,6 @@ import { AuthProvider } from './context/AuthContext';
 import { AppRoutes } from './routes';
 import { Toaster } from 'react-hot-toast';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
-import { billingService } from './services/billingService';
-import { auditService } from './services/auditService';
-
-// Initialize mock data layer on app start
-billingService.initialize();
-auditService.initialize();
 
 export const App: React.FC = () => {
   return (

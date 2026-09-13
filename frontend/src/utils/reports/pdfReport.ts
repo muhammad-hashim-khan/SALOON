@@ -6,14 +6,14 @@ import { MockExpense } from '../../types/expense';
 import { MockBill } from '../../types/billing';
 import { settingsService } from '../../services/settingsService';
 
-export function downloadSalesPDF(range: ReportDateRange, customFrom?: string, customTo?: string, paymentMethod?: string, workerId?: string) {
+export async function downloadSalesPDF(range: ReportDateRange, customFrom?: string, customTo?: string, paymentMethod?: string, workerId?: string) {
   const doc = new jsPDF();
   const dateStr = formatReportDateRange(range, customFrom, customTo);
-  const data = reportService.getSalesReport(range, customFrom, customTo, paymentMethod, workerId);
+  const [data, settings] = await Promise.all([
+    reportService.getSalesReport(range, customFrom, customTo, paymentMethod, workerId),
+    settingsService.getSettings()
+  ]);
 
-  const settings = settingsService.getSettings();
-
-  // Header
   doc.setFontSize(20);
   doc.text(settings.salonName, 14, 22);
   doc.setFontSize(10);
@@ -24,12 +24,10 @@ export function downloadSalesPDF(range: ReportDateRange, customFrom?: string, cu
   doc.text(`Date Range: ${dateStr}`, 14, 46);
   doc.text(`Generated On: ${formatDateTime(new Date().toISOString())}`, 14, 52);
 
-  // Summary
   doc.text(`Total Sales: ${formatMoney(data.totalSales)}`, 14, 62);
   doc.text(`Total Bills: ${data.totalBills}`, 14, 68);
   doc.text(`Average Bill: ${formatMoney(data.averageBill)}`, 14, 74);
 
-  // Table
   autoTable(doc, {
     startY: 82,
     head: [['Bill Number', 'Date', 'Customer', 'Worker', 'Payment', 'Amount']],
@@ -37,7 +35,7 @@ export function downloadSalesPDF(range: ReportDateRange, customFrom?: string, cu
       b.billNumber,
       formatDateTime(b.createdAt),
       b.customerName || 'Walk-in',
-      b.workerId, // Ideally worker name, but we only have ID here directly
+      b.workerName,
       b.paymentMethod,
       formatMoney(b.total)
     ]),
@@ -46,12 +44,13 @@ export function downloadSalesPDF(range: ReportDateRange, customFrom?: string, cu
   doc.save(`${settings.salonName.replace(/ /g, '_')}_Sales_${dateStr.replace(/ /g, '_')}.pdf`);
 }
 
-export function downloadExpensePDF(range: ReportDateRange, customFrom?: string, customTo?: string, category?: string) {
+export async function downloadExpensePDF(range: ReportDateRange, customFrom?: string, customTo?: string, category?: string) {
   const doc = new jsPDF();
   const dateStr = formatReportDateRange(range, customFrom, customTo);
-  const data = reportService.getExpenseReport(range, customFrom, customTo, category);
-
-  const settings = settingsService.getSettings();
+  const [data, settings] = await Promise.all([
+    reportService.getExpenseReport(range, customFrom, customTo, category),
+    settingsService.getSettings()
+  ]);
 
   doc.setFontSize(20);
   doc.text(settings.salonName, 14, 22);
@@ -80,12 +79,13 @@ export function downloadExpensePDF(range: ReportDateRange, customFrom?: string, 
   doc.save(`${settings.salonName.replace(/ /g, '_')}_Expenses_${dateStr.replace(/ /g, '_')}.pdf`);
 }
 
-export function downloadFinancialSummaryPDF(range: ReportDateRange, customFrom?: string, customTo?: string) {
+export async function downloadFinancialSummaryPDF(range: ReportDateRange, customFrom?: string, customTo?: string) {
   const doc = new jsPDF();
   const dateStr = formatReportDateRange(range, customFrom, customTo);
-  const data = reportService.getFinancialSummary(range, customFrom, customTo);
-
-  const settings = settingsService.getSettings();
+  const [data, settings] = await Promise.all([
+    reportService.getFinancialSummary(range, customFrom, customTo),
+    settingsService.getSettings()
+  ]);
 
   doc.setFontSize(20);
   doc.text(settings.salonName, 14, 22);

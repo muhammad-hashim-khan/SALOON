@@ -1,5 +1,5 @@
-import { ExpenseCategory } from './database';
-export type { ExpenseCategory };
+// ExpenseCategory is a plain string union — not from the DB generated types
+export type ExpenseCategory = 'RENT' | 'ELECTRICITY' | 'WATER' | 'SALARY' | 'PRODUCTS' | 'MAINTENANCE' | 'MARKETING' | 'OTHER';
 
 export interface MockExpense {
   id: string;

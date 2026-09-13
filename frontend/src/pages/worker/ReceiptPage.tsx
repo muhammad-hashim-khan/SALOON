@@ -37,16 +37,15 @@ export const ReceiptPage: React.FC = () => {
 
   useEffect(() => {
     if (!id) { setNotFound(true); return; }
-    const found = billingService.getBillById(id);
-    if (!found) { setNotFound(true); return; }
-
-    // RBAC: Workers can only view their own bills
-    if (user?.role === 'WORKER' && found.workerId !== user.id) {
-      setForbidden(true);
-      return;
-    }
-
-    setBill(found);
+    billingService.getBillById(id).then(found => {
+      if (!found) { setNotFound(true); return; }
+      // RBAC: Workers can only view their own bills
+      if (user?.role === 'WORKER' && found.workerId !== user.id) {
+        setForbidden(true);
+        return;
+      }
+      setBill(found);
+    });
   }, [id, user]);
 
   const handlePrint = () => {
@@ -60,7 +59,7 @@ export const ReceiptPage: React.FC = () => {
         <p className="text-xl font-semibold text-gray-300">Bill Not Found</p>
         <p className="text-sm">This bill may have been deleted or the link is invalid.</p>
         <button
-          onClick={() => navigate('/worker/bills')}
+          onClick={() => navigate(user?.role === 'ADMIN' ? '/admin/bills' : '/worker/bills')}
           className="mt-4 px-6 py-2 rounded-xl bg-white/5 border border-white/10 text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-all"
         >
           Back to Bills
@@ -76,7 +75,7 @@ export const ReceiptPage: React.FC = () => {
         <p className="text-xl font-semibold text-gray-300">Access Denied</p>
         <p className="text-sm">You do not have permission to view this bill.</p>
         <button
-          onClick={() => navigate('/worker/bills')}
+          onClick={() => navigate(user?.role === 'ADMIN' ? '/admin/bills' : '/worker/bills')}
           className="mt-4 px-6 py-2 rounded-xl bg-white/5 border border-white/10 text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-all"
         >
           Back to Bills
@@ -92,7 +91,7 @@ export const ReceiptPage: React.FC = () => {
       {/* Toolbar (hidden in print) */}
       <div className="flex items-center gap-3 print:hidden">
         <button
-          onClick={() => navigate('/worker/bills')}
+          onClick={() => navigate(user?.role === 'ADMIN' ? '/admin/bills' : '/worker/bills')}
           className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -106,13 +105,15 @@ export const ReceiptPage: React.FC = () => {
           <Printer className="w-4 h-4" />
           Print Receipt
         </button>
-        <button
-          onClick={() => navigate('/worker/billing')}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-gray-300 hover:text-white transition-all"
-        >
-          <Receipt className="w-4 h-4" />
-          New Bill
-        </button>
+        {user?.role !== 'ADMIN' && (
+          <button
+            onClick={() => navigate('/worker/billing')}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-gray-300 hover:text-white transition-all"
+          >
+            <Receipt className="w-4 h-4" />
+            New Bill
+          </button>
+        )}
       </div>
 
       {/* ────────────────── Receipt Card ────────────────────────────── */}

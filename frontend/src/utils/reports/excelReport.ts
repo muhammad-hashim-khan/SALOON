@@ -3,14 +3,17 @@ import { reportService, ReportDateRange } from '../../services/reportService';
 import { formatReportDateRange, formatMoneyNumber, formatDateTime, formatDateOnly } from './reportFormatters';
 import { settingsService } from '../../services/settingsService';
 
-export function downloadExcelReport(range: ReportDateRange, customFrom?: string, customTo?: string) {
+export async function downloadExcelReport(range: ReportDateRange, customFrom?: string, customTo?: string) {
   const dateStr = formatReportDateRange(range, customFrom, customTo);
-  const fin = reportService.getFinancialSummary(range, customFrom, customTo);
-  const sales = reportService.getSalesReport(range, customFrom, customTo);
-  const expenses = reportService.getExpenseReport(range, customFrom, customTo);
-  const workers = reportService.getWorkerReport(range, customFrom, customTo);
   
-  const settings = settingsService.getSettings();
+  const [fin, sales, expenses, workers, settings] = await Promise.all([
+    reportService.getFinancialSummary(range, customFrom, customTo),
+    reportService.getSalesReport(range, customFrom, customTo),
+    reportService.getExpenseReport(range, customFrom, customTo),
+    reportService.getWorkerReport(range, customFrom, customTo),
+    settingsService.getSettings()
+  ]);
+  
   const wb = XLSX.utils.book_new();
   
   // Sheet 1: Summary
@@ -36,7 +39,7 @@ export function downloadExcelReport(range: ReportDateRange, customFrom?: string,
     'Bill Number': b.billNumber,
     'Date': formatDateTime(b.createdAt),
     'Customer': b.customerName || 'Walk-in',
-    'Worker ID': b.workerId,
+    'Worker': b.workerName,
     'Subtotal': formatMoneyNumber(b.subtotal),
     'Discount': formatMoneyNumber(b.discount),
     'Total': formatMoneyNumber(b.total),

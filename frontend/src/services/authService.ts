@@ -1,15 +1,4 @@
-/**
- * Authentication Service (DEVELOPMENT ONLY MOCK LAYER)
- *
- * Provides an abstracted interface for authentication operations.
- * When Supabase Auth is integrated in a later phase, only this service
- * will be swapped with the Supabase client without requiring UI redesigns.
- *
- * Now delegates user lookup to workerService so dynamically created /
- * deactivated workers are respected at login time.
- */
-
-import { workerService } from './workerService';
+import { supabase } from '../lib/supabase';
 import { auditService } from './auditService';
 import { UserRole, UserStatus } from '../types';
 
@@ -21,103 +10,124 @@ export interface SafeUser {
   status: UserStatus;
 }
 
-const SESSION_STORAGE_KEY = 'cutandstyle_mock_session';
-
 export const authService = {
   /**
-   * Authenticate with email and password.
-   * Looks up the live user record (includes dynamically created workers).
+   * Authenticate with email and password using Supabase
    */
   async login(
     email: string,
     password: string
   ): Promise<{ success: boolean; user?: SafeUser; error?: string }> {
-    // Simulate slight network latency for realistic UI feedback
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
 
-    const foundUser = workerService.getUserForAuth(email.trim().toLowerCase());
+      if (error) {
+        return { success: false, error: 'Invalid email or password.' };
+      }
 
-    if (!foundUser || foundUser.password !== password) {
-      return { success: false, error: 'Invalid email or password.' };
-    }
+      if (!data.user) {
+        return { success: false, error: 'Authentication failed.' };
+      }
 
-    if (foundUser.status === 'INACTIVE') {
-      return {
-        success: false,
-        error: 'Your account has been deactivated. Please contact the administrator.',
+      // Fetch the profile to get role and status
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileError || !profile) {
+        await supabase.auth.signOut();
+        return { success: false, error: 'Could not fetch user profile.' };
+      }
+
+      if (profile.status === 'INACTIVE') {
+        await supabase.auth.signOut();
+        return {
+          success: false,
+          error: 'Your account has been deactivated. Please contact the administrator.',
+        };
+      }
+
+      const safeUserData: SafeUser = {
+        id: profile.id,
+        email: profile.email,
+        fullName: profile.full_name,
+        role: profile.role as UserRole,
+        status: profile.status as UserStatus,
       };
+
+      // Audit Log
+      auditService.logAction(
+        safeUserData.id,
+        safeUserData.fullName,
+        'LOGIN',
+        'AUTH',
+        null,
+        `${safeUserData.role === 'ADMIN' ? 'Admin' : 'Worker'} logged in successfully.`
+      );
+
+      return { success: true, user: safeUserData };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Login failed.' };
     }
-
-    const safeUserData: SafeUser = {
-      id: foundUser.id,
-      email: foundUser.email,
-      fullName: foundUser.fullName,
-      role: foundUser.role,
-      status: foundUser.status,
-    };
-
-    // Store safe user data in localStorage (no passwords)
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(safeUserData));
-    
-    // Audit Log
-    auditService.logAction(
-      safeUserData.id,
-      safeUserData.fullName,
-      'LOGIN',
-      'AUTH',
-      null,
-      `${safeUserData.role === 'ADMIN' ? 'Admin' : 'Worker'} logged in successfully.`
-    );
-    
-    return { success: true, user: safeUserData };
   },
 
-  /** Sign out and clear stored session */
+  /** Sign out */
   async logout(): Promise<void> {
-    const user = this.getCurrentUser();
-    if (user) {
-      auditService.logAction(user.id, user.fullName, 'LOGOUT', 'AUTH', null, 'User logged out.');
+    try {
+      const user = await this.getCurrentUserAsync();
+      if (user) {
+        auditService.logAction(user.id, user.fullName, 'LOGOUT', 'AUTH', null, 'User logged out.');
+      }
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error('Logout error', e);
     }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    localStorage.removeItem(SESSION_STORAGE_KEY);
   },
 
   /**
-   * Restore the currently active session from localStorage.
-   * Re-validates against live worker store so deactivations take immediate effect.
+   * Fetch the current active user session from Supabase
    */
-  getCurrentUser(): SafeUser | null {
+  async getCurrentUserAsync(): Promise<SafeUser | null> {
     try {
-      const stored = localStorage.getItem(SESSION_STORAGE_KEY);
-      if (!stored) return null;
-      const parsed = JSON.parse(stored) as SafeUser;
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.user) return null;
 
-      // Re-check live status — catches admin deactivating a logged-in worker
-      const live = workerService.getById(parsed.id);
-      if (!live || live.status === 'INACTIVE') {
-        localStorage.removeItem(SESSION_STORAGE_KEY);
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+
+      if (profileError || !profile || profile.status === 'INACTIVE') {
         return null;
       }
 
-      return parsed;
+      return {
+        id: profile.id,
+        email: profile.email,
+        fullName: profile.full_name,
+        role: profile.role as UserRole,
+        status: profile.status as UserStatus,
+      };
     } catch {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
       return null;
     }
   },
+  
+  /** Legacy synchronous getter, mostly disabled now but required by types if not refactored fully */
+  getCurrentUser(): SafeUser | null {
+    // Cannot block, so return null for sync calls. 
+    // AuthContext is refactored to use async.
+    return null;
+  },
 
-  /** Get available demo credentials for the development login helper */
-  getDemoCredentials() {
-    return workerService
-      .getAllUsers()
-      .filter((u) => u.status === 'ACTIVE')
-      .slice(0, 3) // only show first 3 in helper
-      .map(({ id, email, password, fullName, role }) => ({
-        id,
-        email,
-        password,
-        fullName,
-        role,
-      }));
+  /** Get available demo credentials for the development login helper (removed in prod DB) */
+  getDemoCredentials(): {id: string; email: string; password: string; role: string}[] {
+    return [];
   },
 };

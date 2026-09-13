@@ -36,9 +36,9 @@ export const AdminWorkersPage: React.FC = () => {
   const [createForm, setCreateForm] = useState({ fullName: '', email: '', password: '' });
   const [createError, setCreateError] = useState('');
 
-  const loadData = () => {
-    const wList = workerService.getWorkers();
-    const bList = billingService.getBills();
+  const loadData = async () => {
+    const wList = await workerService.getWorkers();
+    const bList = await billingService.getBills();
     const wPerf = calcWorkerPerformance(bList);
     const pMap = new Map(wPerf.map(p => [p.workerId, p]));
 
@@ -55,10 +55,10 @@ export const AdminWorkersPage: React.FC = () => {
     setConfirmTarget(worker);
   };
 
-  const executeToggle = () => {
+  const executeToggle = async () => {
     if (!confirmTarget) return;
     const newStatus = confirmTarget.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-    workerService.updateStatus(confirmTarget.id, newStatus);
+    await workerService.updateStatus(confirmTarget.id, newStatus);
 
     const action = newStatus === 'INACTIVE' ? 'DEACTIVATE_WORKER' : 'ACTIVATE_WORKER';
     auditService.logAction(
@@ -93,7 +93,7 @@ export const AdminWorkersPage: React.FC = () => {
     return null;
   };
 
-  const handleCreateWorker = (e: React.FormEvent) => {
+  const handleCreateWorker = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError('');
 
@@ -104,8 +104,8 @@ export const AdminWorkersPage: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      const res = workerService.createWorker(createForm);
+    try {
+      const res = await workerService.createWorker(createForm);
       if (!res.success) {
         setCreateError(res.error || 'Failed to create worker.');
         setIsSubmitting(false);
@@ -126,7 +126,10 @@ export const AdminWorkersPage: React.FC = () => {
       setIsCreateOpen(false);
       setIsSubmitting(false);
       loadData();
-    }, 400);
+    } catch (err: any) {
+      setCreateError(err.message || 'An unexpected error occurred.');
+      setIsSubmitting(false);
+    }
   };
 
   // ── Worker Details View ──

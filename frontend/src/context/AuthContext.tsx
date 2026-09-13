@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService, SafeUser } from '../services/authService';
 import { UserRole } from '../types';
+import { supabase } from '../lib/supabase';
 
 export interface AuthContextType {
   user: SafeUser | null;
@@ -20,13 +21,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Initialize and restore session on app load
   useEffect(() => {
-    const sessionUser = authService.getCurrentUser();
-    if (sessionUser && sessionUser.status === 'ACTIVE') {
-      setUser(sessionUser);
-    } else {
-      setUser(null);
-    }
-    setLoading(false);
+    let mounted = true;
+    
+    const initializeAuth = async () => {
+      const sessionUser = await authService.getCurrentUserAsync();
+      if (mounted) {
+        if (sessionUser && sessionUser.status === 'ACTIVE') {
+          setUser(sessionUser);
+        } else {
+          setUser(null);
+        }
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, _session) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+      } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        const sessionUser = await authService.getCurrentUserAsync();
+        if (mounted) {
+          setUser(sessionUser?.status === 'ACTIVE' ? sessionUser : null);
+        }
+      }
+    });
+
+    return () => {
+      mounted = false;
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   /**

@@ -1,20 +1,30 @@
-import { MockAuditLog, initialAuditLogs } from '../mock/mockAuditLogs';
-
-const STORAGE_KEY = 'cutandstyle_mock_audit_logs';
+import { supabase } from '../lib/supabase';
+import { MockAuditLog } from '../mock/mockAuditLogs';
 
 export const auditService = {
-  initialize() {
-    if (!localStorage.getItem(STORAGE_KEY)) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(initialAuditLogs));
-    }
+  initialize() {},
+
+  async getLogs(): Promise<MockAuditLog[]> {
+    const { data, error } = await supabase
+      .from('audit_logs')
+      .select('*')
+      .order('created_at', { ascending: false });
+      
+    if (error || !data) return [];
+    
+    return data.map((log: any) => ({
+      id: log.id,
+      userId: log.user_id,
+      userName: log.user_name,
+      action: log.action,
+      entityType: log.entity_type,
+      entityId: log.entity_id,
+      description: log.description,
+      createdAt: log.created_at
+    }));
   },
 
-  getLogs(): MockAuditLog[] {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  },
-
-  logAction(
+  async logAction(
     userId: string, 
     userName: string, 
     action: string, 
@@ -22,29 +32,27 @@ export const auditService = {
     entityId: string | null, 
     description: string
   ) {
-    const logs = this.getLogs();
-    const newLog: MockAuditLog = {
-      id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      userId,
-      userName,
-      action,
-      entityType,
-      entityId,
-      description,
-      createdAt: new Date().toISOString()
-    };
-    
-    logs.unshift(newLog); // Prepend to keep newest first
-    
-    // Keep max 1000 logs in mock storage
-    if (logs.length > 1000) {
-      logs.length = 1000;
+    try {
+      await supabase.from('audit_logs').insert({
+        user_id: userId,
+        user_name: userName,
+        action,
+        entity_type: entityType,
+        entity_id: entityId,
+        description
+      });
+    } catch (err) {
+      console.error('Failed to log action', err);
     }
-    
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
   },
 
-  clearLogs() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+  async clearLogs() {
+    try {
+      // In a real production app, clearing audit logs shouldn't be allowed,
+      // or should be severely restricted.
+      await supabase.from('audit_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    } catch (err) {
+      console.error('Failed to clear logs', err);
+    }
   }
 };

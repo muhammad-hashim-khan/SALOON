@@ -65,6 +65,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="expenses" element={<AdminExpensesPage />} />
         <Route path="reports" element={<AdminReportsPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
+        <Route path="bills/:id" element={<ReceiptPage />} />
       </Route>
 
       {/* Worker Protected Routes (Role: WORKER only) */}

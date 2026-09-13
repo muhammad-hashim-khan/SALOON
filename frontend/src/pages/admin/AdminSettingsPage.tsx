@@ -1,45 +1,80 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, ShieldCheck, FileText, RotateCcw, Save } from 'lucide-react';
+import { Settings, ShieldCheck, FileText, RotateCcw, Save, KeyRound, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { settingsService, MockSettings } from '../../services/settingsService';
 import { auditService } from '../../services/auditService';
 import { MockAuditLog } from '../../mock/mockAuditLogs';
 import { formatDateTime } from '../../utils/reports/reportFormatters';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../hooks/useAuth';
 
 export const AdminSettingsPage: React.FC = () => {
-  const [settings, setSettings] = useState<MockSettings>(settingsService.getSettings());
+  const { user } = useAuth();
+  const [settings, setSettings] = useState<MockSettings>({
+    salonName: 'CUT&STYLE',
+    businessName: 'SALON & SPA',
+    phone: '',
+    address: ''
+  });
   const [logs, setLogs] = useState<MockAuditLog[]>([]);
   const [isResetting, setIsResetting] = useState(false);
 
+  // Admin account fields
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [accountLoading, setAccountLoading] = useState(false);
+
   useEffect(() => {
-    setLogs(auditService.getLogs());
+    settingsService.getSettings().then(setSettings);
+    auditService.getLogs().then(setLogs);
   }, []);
 
-  const handleSaveSettings = (e: React.FormEvent) => {
+  const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    settingsService.saveSettings(settings);
+    await settingsService.saveSettings(settings);
     toast.success('Settings saved successfully!');
-    // Ideally we would use context for settings, but for mock, reload or manual sync works
-    // A quick reload ensures the UI picks up the new name everywhere (sidebar, dashboard).
     setTimeout(() => window.location.reload(), 1000);
   };
 
-  const handleReset = () => {
-    if (window.confirm('WARNING: Are you sure you want to reset all mock data? This will clear Bills, Expenses, Workers (except defaults), Settings, and Audit Logs. This action cannot be undone.')) {
+  const handleReset = async () => {
+    if (window.confirm('WARNING: Are you sure you want to reset to defaults? This will reset salon settings. This cannot be undone.')) {
       setIsResetting(true);
-      
-      // Clear local storage completely except maybe we just want to clear specific keys
-      localStorage.removeItem('cutandstyle_mock_bills');
-      localStorage.removeItem('cutandstyle_mock_expenses');
-      localStorage.removeItem('cutandstyle_mock_users');
-      localStorage.removeItem('cutandstyle_mock_audit_logs');
-      localStorage.removeItem('cutandstyle_mock_settings');
-      localStorage.removeItem('cutandstyle_mock_session');
-      
-      toast.success('Demo data reset successfully.');
-      setTimeout(() => {
-        window.location.href = '/login';
-      }, 1000);
+      await settingsService.resetSettings();
+      toast.success('Settings reset to defaults.');
+      setTimeout(() => window.location.reload(), 1000);
+    }
+  };
+
+  const handleUpdateEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmail.trim()) { toast.error('Please enter a new email address.'); return; }
+    setAccountLoading(true);
+    const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
+    setAccountLoading(false);
+    if (error) {
+      toast.error(error.message || 'Failed to update email.');
+    } else {
+      auditService.logAction(user?.id || '', user?.fullName || 'Admin', 'UPDATE_EMAIL', 'AUTH', null, 'Admin email updated.');
+      toast.success('Email updated! Check your new email inbox to confirm the change.');
+      setNewEmail('');
+    }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 6) { toast.error('Password must be at least 6 characters.'); return; }
+    if (newPassword !== confirmPassword) { toast.error('Passwords do not match.'); return; }
+    setAccountLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setAccountLoading(false);
+    if (error) {
+      toast.error(error.message || 'Failed to update password.');
+    } else {
+      auditService.logAction(user?.id || '', user?.fullName || 'Admin', 'UPDATE_PASSWORD', 'AUTH', null, 'Admin password updated.');
+      toast.success('Password updated successfully!');
+      setNewPassword('');
+      setConfirmPassword('');
     }
   };
 
@@ -53,20 +88,20 @@ export const AdminSettingsPage: React.FC = () => {
           </p>
         </div>
         
-        {/* DEVELOPMENT ONLY */}
         <button 
           onClick={handleReset}
           disabled={isResetting}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-500 text-sm font-medium hover:bg-red-500/20 transition-colors border border-red-500/20"
         >
           <RotateCcw className="w-4 h-4" />
-          {isResetting ? 'Resetting...' : 'Reset Demo Data'}
+          {isResetting ? 'Resetting...' : 'Reset Settings'}
         </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Settings Form */}
-        <div className="lg:col-span-1">
+        {/* Left Column — Salon Settings + Account Security */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Salon Identity Form */}
           <form onSubmit={handleSaveSettings} className="bg-[#15171e] border border-white/10 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2.5 rounded-xl bg-[#c5a880]/10 text-[#c5a880]">
@@ -123,6 +158,69 @@ export const AdminSettingsPage: React.FC = () => {
               <Save className="w-4 h-4" /> Save Settings
             </button>
           </form>
+
+          {/* Admin Account Security */}
+          <div className="bg-[#15171e] border border-white/10 rounded-2xl p-6 space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-400">
+                <KeyRound className="w-5 h-5" />
+              </div>
+              <h2 className="text-lg font-bold text-white">Admin Account</h2>
+            </div>
+
+            {/* Current Email */}
+            <div className="text-sm text-gray-400">
+              Current email: <span className="text-white font-medium">{user?.email}</span>
+            </div>
+
+            {/* Change Email */}
+            <form onSubmit={handleUpdateEmail} className="space-y-3">
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">Change Email</label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
+                <input
+                  type="email"
+                  placeholder="New email address"
+                  value={newEmail}
+                  onChange={e => setNewEmail(e.target.value)}
+                  className="w-full bg-[#1b1d26] border border-white/10 rounded-xl pl-9 pr-4 py-2 text-white text-sm focus:outline-none focus:border-[#c5a880] transition-colors"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={accountLoading}
+                className="w-full py-2 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/20 hover:bg-blue-600/30 text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                {accountLoading ? 'Updating...' : 'Update Email'}
+              </button>
+            </form>
+
+            {/* Change Password */}
+            <form onSubmit={handleUpdatePassword} className="space-y-3">
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">Change Password</label>
+              <input
+                type="password"
+                placeholder="New password (min 6 chars)"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                className="w-full bg-[#1b1d26] border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-[#c5a880] transition-colors"
+              />
+              <input
+                type="password"
+                placeholder="Confirm new password"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                className="w-full bg-[#1b1d26] border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-[#c5a880] transition-colors"
+              />
+              <button
+                type="submit"
+                disabled={accountLoading}
+                className="w-full py-2 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-600/30 text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                {accountLoading ? 'Updating...' : 'Update Password'}
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* Audit Log */}

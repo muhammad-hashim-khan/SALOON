@@ -31,9 +31,15 @@ export const AdminBillsPage: React.FC = () => {
   const [workerFilter, setWorkerFilter] = useState<string>('ALL');
 
   useEffect(() => {
-    setBills(billingService.getBills());
-    const w = workerService.getWorkers().map(w => ({ id: w.id, name: w.fullName }));
-    setWorkers(w);
+    const loadData = async () => {
+      const [allBills, allWorkers] = await Promise.all([
+        billingService.getBills(),
+        workerService.getWorkers()
+      ]);
+      setBills(allBills);
+      setWorkers(allWorkers.map(w => ({ id: w.id, name: w.fullName })));
+    };
+    loadData();
   }, []);
 
   const filteredBills = useMemo(() => {
@@ -196,7 +202,7 @@ export const AdminBillsPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <button
-                        onClick={() => navigate(`/worker/bills/${bill.id}`)}
+                        onClick={() => navigate(`/admin/bills/${bill.id}`)}
                         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-gray-300 hover:text-white transition-colors"
                       >
                         <Eye className="w-3.5 h-3.5" />

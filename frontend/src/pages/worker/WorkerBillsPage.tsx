@@ -23,9 +23,10 @@ export const WorkerBillsPage: React.FC = () => {
   const [bills, setBills] = useState<MockBill[]>([]);
   const [query, setQuery] = useState('');
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     if (!user) return;
-    setBills(billingService.getBillsByWorker(user.id));
+    const bills = await billingService.getBillsByWorker(user.id);
+    setBills(bills);
   }, [user]);
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FileText, Printer, FileSpreadsheet, FileIcon, 
   Calendar, Filter 
@@ -47,42 +47,81 @@ export const AdminReportsPage: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState('ALL');
 
   const { user } = useAuth();
-  const settings = settingsService.getSettings();
-  const workers = workerService.getWorkers();
+  const [settings, setSettings] = useState({ salonName: 'CUT&STYLE', businessName: 'SALON & SPA', phone: '', address: '' });
+  const [workers, setWorkers] = useState<{id: string; fullName: string; role: string; status: string; email: string; createdAt: string}[]>([]);
 
   const handlePrint = () => {
     window.print();
   };
 
-  const handleDownloadPDF = () => {
-    if (reportType === 'sales') downloadSalesPDF(dateRange, customFrom, customTo, paymentFilter, workerFilter);
-    else if (reportType === 'expenses') downloadExpensePDF(dateRange, customFrom, customTo, categoryFilter);
-    else downloadFinancialSummaryPDF(dateRange, customFrom, customTo);
+  const handleDownloadPDF = async () => {
+    if (reportType === 'sales') await downloadSalesPDF(dateRange, customFrom, customTo, paymentFilter, workerFilter);
+    else if (reportType === 'expenses') await downloadExpensePDF(dateRange, customFrom, customTo, categoryFilter);
+    else await downloadFinancialSummaryPDF(dateRange, customFrom, customTo);
     auditService.logAction(user?.id || 'admin', user?.fullName || 'Admin', 'DOWNLOAD_REPORT', 'REPORT', null, `Downloaded ${reportType} report as PDF`);
     toast.success('PDF downloaded.');
   };
 
-  const handleDownloadCSV = () => {
-    if (reportType === 'sales') downloadSalesCSV(dateRange, customFrom, customTo, paymentFilter, workerFilter);
-    else if (reportType === 'expenses') downloadExpenseCSV(dateRange, customFrom, customTo, categoryFilter);
-    else downloadFinancialSummaryCSV(dateRange, customFrom, customTo);
+  const handleDownloadCSV = async () => {
+    if (reportType === 'sales') await downloadSalesCSV(dateRange, customFrom, customTo, paymentFilter, workerFilter);
+    else if (reportType === 'expenses') await downloadExpenseCSV(dateRange, customFrom, customTo, categoryFilter);
+    else await downloadFinancialSummaryCSV(dateRange, customFrom, customTo);
     auditService.logAction(user?.id || 'admin', user?.fullName || 'Admin', 'DOWNLOAD_REPORT', 'REPORT', null, `Downloaded ${reportType} report as CSV`);
     toast.success('CSV downloaded.');
   };
 
-  const handleDownloadExcel = () => {
-    downloadExcelReport(dateRange, customFrom, customTo);
+  const handleDownloadExcel = async () => {
+    await downloadExcelReport(dateRange, customFrom, customTo);
     auditService.logAction(user?.id || 'admin', user?.fullName || 'Admin', 'DOWNLOAD_REPORT', 'REPORT', null, `Downloaded combined report as Excel`);
     toast.success('Excel downloaded.');
   };
 
-  // Data Fetching
-  const summaryData = useMemo(() => reportService.getFinancialSummary(dateRange, customFrom, customTo), [dateRange, customFrom, customTo]);
-  const salesData = useMemo(() => reportService.getSalesReport(dateRange, customFrom, customTo, paymentFilter, workerFilter), [dateRange, customFrom, customTo, paymentFilter, workerFilter]);
-  const expData = useMemo(() => reportService.getExpenseReport(dateRange, customFrom, customTo, categoryFilter), [dateRange, customFrom, customTo, categoryFilter]);
-  const payData = useMemo(() => reportService.getPaymentReport(dateRange, customFrom, customTo), [dateRange, customFrom, customTo]);
-  const workerData = useMemo(() => reportService.getWorkerReport(dateRange, customFrom, customTo), [dateRange, customFrom, customTo]);
-  const vsData = useMemo(() => reportService.getSalesVsExpenses(dateRange, customFrom, customTo), [dateRange, customFrom, customTo]);
+  // Load settings and workers once
+  useEffect(() => {
+    settingsService.getSettings().then(setSettings);
+    workerService.getWorkers().then(setWorkers);
+  }, []);
+
+  // Report Data State
+  const [summaryData, setSummaryData] = useState<any>(null);
+  const [salesData, setSalesData] = useState<any>(null);
+  const [expData, setExpData] = useState<any>(null);
+  const [payData, setPayData] = useState<any>(null);
+  const [workerData, setWorkerData] = useState<any>(null);
+  const [vsData, setVsData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Reload report data on filter changes
+  useEffect(() => {
+    setIsLoading(true);
+    Promise.all([
+      reportService.getFinancialSummary(dateRange, customFrom, customTo),
+      reportService.getSalesReport(dateRange, customFrom, customTo, paymentFilter, workerFilter),
+      reportService.getExpenseReport(dateRange, customFrom, customTo, categoryFilter),
+      reportService.getPaymentReport(dateRange, customFrom, customTo),
+      reportService.getWorkerReport(dateRange, customFrom, customTo),
+      reportService.getSalesVsExpenses(dateRange, customFrom, customTo),
+    ]).then(([summary, sales, exp, pay, worker, vs]) => {
+      setSummaryData(summary);
+      setSalesData(sales);
+      setExpData(exp);
+      setPayData(pay);
+      setWorkerData(worker);
+      setVsData(vs);
+      setIsLoading(false);
+    }).catch(() => setIsLoading(false));
+  }, [dateRange, customFrom, customTo, paymentFilter, workerFilter, categoryFilter]);
+
+  if (isLoading && !summaryData) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-3">
+          <div className="w-8 h-8 border-2 border-[#c5a880] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-gray-400 text-sm">Loading reports...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 print:space-y-4">
@@ -277,7 +316,7 @@ export const AdminReportsPage: React.FC = () => {
                 <tbody className="divide-y divide-white/5 print:divide-black">
                   {salesData.bills.length === 0 ? (
                     <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-500">No sales data for this period.</td></tr>
-                  ) : salesData.bills.map(b => {
+                  ) : salesData.bills.map((b: any) => {
                     const w = workers.find(w => w.id === b.workerId);
                     return (
                     <tr key={b.id} className="print:text-black">
@@ -329,7 +368,7 @@ export const AdminReportsPage: React.FC = () => {
                   <tbody className="divide-y divide-white/5 print:divide-black">
                     {expData.expenses.length === 0 ? (
                       <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-500">No expenses for this period.</td></tr>
-                    ) : expData.expenses.map(e => (
+                    ) : expData.expenses.map((e: any) => (
                       <tr key={e.id} className="print:text-black">
                         <td className="px-5 py-3 text-gray-300 print:text-black">{formatDateOnly(e.expenseDate)}</td>
                         <td className="px-5 py-3 text-gray-400 print:text-black">{e.category}</td>
@@ -350,7 +389,7 @@ export const AdminReportsPage: React.FC = () => {
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie data={expData.categoryBreakdown} dataKey="total" cx="50%" cy="50%" innerRadius={50} outerRadius={70} stroke="none">
-                          {expData.categoryBreakdown.map((_, index) => (
+                          {expData.categoryBreakdown.map((_: any, index: number) => (
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
@@ -359,7 +398,7 @@ export const AdminReportsPage: React.FC = () => {
                     </ResponsiveContainer>
                   </div>
                   <div className="space-y-2">
-                    {expData.categoryBreakdown.map((c, idx) => (
+                    {expData.categoryBreakdown.map((c: any, idx: number) => (
                       <div key={c.category} className="flex justify-between text-sm">
                         <span className="text-gray-400 print:text-black flex items-center gap-2">
                           <div className="w-2 h-2 rounded-full print:hidden" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
@@ -451,7 +490,7 @@ export const AdminReportsPage: React.FC = () => {
               <tbody className="divide-y divide-white/5 print:divide-black">
                 {workerData.workerPerformance.length === 0 ? (
                   <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-500">No active workers.</td></tr>
-                ) : workerData.workerPerformance.map(w => (
+                ) : workerData.workerPerformance.map((w: any) => (
                   <tr key={w.workerId} className="print:text-black">
                     <td className="px-5 py-4 text-white print:text-black font-medium">{w.workerName}</td>
                     <td className="px-5 py-4 text-center text-gray-400 print:text-black">{w.totalBills}</td>

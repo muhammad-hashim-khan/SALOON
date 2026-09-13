@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { authService } from '../../services/authService';
-import { settingsService } from '../../services/settingsService';
 import toast from 'react-hot-toast';
 import { Scissors, Lock, Mail, Eye, EyeOff, Loader2, AlertCircle, Sparkles, User, Shield } from 'lucide-react';
 
@@ -16,7 +15,7 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const settings = settingsService.getSettings();
+  const [settings] = useState({ salonName: 'CUT&STYLE', businessName: 'SALON & SPA' });
 
   // Auto-redirect if already logged in
   useEffect(() => {

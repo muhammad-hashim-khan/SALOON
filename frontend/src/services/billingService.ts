@@ -1,145 +1,135 @@
-/**
- * Billing Service (DEVELOPMENT ONLY — Mock localStorage Layer)
- *
- * Abstracted billing API.  When switching to a real backend, replace the
- * body of each method with an API call — the UI callers need no changes.
- *
- * Architecture:
- *   Billing UI
- *     ↓
- *   billingService.ts   ← you are here
- *     ↓
- *   Mock localStorage   (Phase 3)
- *     ↓
- *   Express API → Supabase   (Future)
- */
-
+import { supabase } from '../lib/supabase';
 import {
   MockBill,
-  MockBillItem,
   CreateBillInput,
 } from '../types/billing';
-import {
-  seedMockBills,
-  BILLS_STORAGE_KEY,
-  BILL_COUNTER_KEY,
-  SEED_BILL_COUNTER,
-} from '../mock/mockBills';
-import { generateId } from '../utils/money';
-
-// ─── Internal helpers ────────────────────────────────────────────────────────
-
-function loadAllBills(): MockBill[] {
-  try {
-    const raw = localStorage.getItem(BILLS_STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as MockBill[];
-  } catch {
-    return [];
-  }
-}
-
-function saveAllBills(bills: MockBill[]): void {
-  localStorage.setItem(BILLS_STORAGE_KEY, JSON.stringify(bills));
-}
-
-function getCounter(): number {
-  const raw = localStorage.getItem(BILL_COUNTER_KEY);
-  return raw ? parseInt(raw, 10) : 0;
-}
-
-function incrementCounter(): number {
-  const next = getCounter() + 1;
-  localStorage.setItem(BILL_COUNTER_KEY, String(next));
-  return next;
-}
-
-function formatBillNumber(counter: number): string {
-  const year = new Date().getFullYear();
-  return `CS-${year}-${String(counter).padStart(6, '0')}`;
-}
-
-// ─── Seeding ─────────────────────────────────────────────────────────────────
-
-/**
- * Call once on app load.
- * If storage is empty, populate with seed data so the UI has sample bills.
- */
-function seedIfEmpty(): void {
-  const existing = loadAllBills();
-  if (existing.length === 0) {
-    saveAllBills(seedMockBills);
-    // Only set counter if it hasn't been set yet
-    if (!localStorage.getItem(BILL_COUNTER_KEY)) {
-      localStorage.setItem(BILL_COUNTER_KEY, String(SEED_BILL_COUNTER));
-    }
-  }
-}
-
-// ─── Public API ───────────────────────────────────────────────────────────────
 
 export const billingService = {
-  /** Must be called once at app startup */
-  initialize(): void {
-    seedIfEmpty();
-  },
+  /** No-op for supabase integration */
+  initialize(): void {},
 
-  /** Create a new bill; returns the persisted bill */
-  createBill(input: CreateBillInput): MockBill {
-    const counter = incrementCounter();
-    const billNumber = formatBillNumber(counter);
+  /** Create a new bill using the secure atomic RPC function */
+  async createBill(input: CreateBillInput): Promise<MockBill> {
+    const { data: billId, error } = await supabase.rpc('create_bill_with_items', {
+      p_worker_id: input.workerId,
+      p_customer_name: input.customerName.trim(),
+      p_customer_phone: input.customerPhone.trim(),
+      p_discount: input.discount,
+      p_payment_method: input.paymentMethod,
+      p_items: input.items.map(it => ({
+        description: it.description.trim(),
+        amount: it.amount
+      }))
+    });
 
-    const items: MockBillItem[] = input.items.map((it) => ({
-      id: generateId(),
-      description: it.description.trim(),
-      amount: it.amount, // paise
-    }));
+    if (error) throw new Error(error.message);
 
-    const subtotal = items.reduce((sum, it) => sum + it.amount, 0);
-    const total = Math.max(0, subtotal - input.discount);
-
-    const bill: MockBill = {
-      id: generateId(),
-      billNumber,
-      workerId: input.workerId,
-      workerName: input.workerName,
-      customerName: input.customerName.trim(),
-      customerPhone: input.customerPhone.trim(),
-      items,
-      subtotal,
-      discount: input.discount,
-      total,
-      paymentMethod: input.paymentMethod,
-      createdAt: new Date().toISOString(),
-    };
-
-    const all = loadAllBills();
-    saveAllBills([bill, ...all]);
+    // Fetch the fully created bill to return
+    const bill = await this.getBillById(billId);
+    if (!bill) throw new Error("Bill created but could not be fetched.");
     return bill;
   },
 
-  /** All bills in storage */
-  getBills(): MockBill[] {
-    return loadAllBills();
+  /** Fetch all bills (Admin only, handled by RLS) */
+  async getBills(): Promise<MockBill[]> {
+    const { data, error } = await supabase
+      .from('bills')
+      .select('*, bill_items(*), profiles(full_name)')
+      .order('created_at', { ascending: false });
+
+    if (error || !data) return [];
+
+    return data.map((b: any) => ({
+      id: b.id,
+      billNumber: b.bill_number,
+      workerId: b.worker_id,
+      workerName: b.profiles?.full_name || 'Unknown',
+      customerName: b.customer_name,
+      customerPhone: b.customer_phone,
+      subtotal: b.subtotal,
+      discount: b.discount,
+      total: b.total,
+      paymentMethod: b.payment_method,
+      createdAt: b.created_at,
+      items: b.bill_items.map((it: any) => ({
+        id: it.id,
+        description: it.description,
+        amount: it.amount
+      }))
+    }));
   },
 
   /** Single bill by id */
-  getBillById(id: string): MockBill | null {
-    return loadAllBills().find((b) => b.id === id) || null;
+  async getBillById(id: string): Promise<MockBill | null> {
+    const { data, error } = await supabase
+      .from('bills')
+      .select('*, bill_items(*), profiles(full_name)')
+      .eq('id', id)
+      .single();
+
+    if (error || !data) return null;
+
+    return {
+      id: data.id,
+      billNumber: data.bill_number,
+      workerId: data.worker_id,
+      workerName: data.profiles?.full_name ?? 'Unknown',
+      customerName: data.customer_name ?? '',
+      customerPhone: data.customer_phone ?? '',
+      subtotal: data.subtotal,
+      discount: data.discount,
+      total: data.total,
+      paymentMethod: data.payment_method,
+      createdAt: data.created_at,
+      items: data.bill_items.map((it: any) => ({
+        id: it.id,
+        description: it.description,
+        amount: it.amount
+      }))
+    };
   },
 
   /** Bills belonging to a specific worker, sorted newest first */
-  getBillsByWorker(workerId: string): MockBill[] {
-    return loadAllBills()
-      .filter((b) => b.workerId === workerId)
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+  async getBillsByWorker(workerId: string): Promise<MockBill[]> {
+    const { data, error } = await supabase
+      .from('bills')
+      .select('*, bill_items(*), profiles(full_name)')
+      .eq('worker_id', workerId)
+      .order('created_at', { ascending: false });
+
+    if (error || !data) return [];
+
+    return data.map((b: any) => ({
+      id: b.id,
+      billNumber: b.bill_number,
+      workerId: b.worker_id,
+      workerName: b.profiles?.full_name ?? 'Unknown',
+      customerName: b.customer_name ?? '',
+      customerPhone: b.customer_phone ?? '',
+      subtotal: b.subtotal,
+      discount: b.discount,
+      total: b.total,
+      paymentMethod: b.payment_method,
+      createdAt: b.created_at,
+      items: b.bill_items.map((it: any) => ({
+        id: it.id,
+        description: it.description,
+        amount: it.amount
+      }))
+    }));
   },
 
-  /** Preview what the next bill number will be (without consuming it) */
-  peekNextBillNumber(): string {
-    return formatBillNumber(getCounter() + 1);
+  /** 
+   * Preview what the next bill number will be.
+   * Supabase uses a sequence, so we can preview it.
+   */
+  async peekNextBillNumber(): Promise<string> {
+    try {
+      const { data, error } = await supabase.rpc('peek_next_bill_number' as any);
+      if (error) return 'CS-YYYY-XXXXXX';
+      return data ?? 'CS-YYYY-XXXXXX';
+    } catch {
+      return 'CS-YYYY-XXXXXX';
+    }
   },
 };

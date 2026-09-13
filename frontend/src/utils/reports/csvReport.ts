@@ -3,15 +3,18 @@ import { reportService, ReportDateRange } from '../../services/reportService';
 import { formatReportDateRange, formatMoneyNumber, formatDateTime, formatDateOnly } from './reportFormatters';
 import { settingsService } from '../../services/settingsService';
 
-export function downloadSalesCSV(range: ReportDateRange, customFrom?: string, customTo?: string, paymentMethod?: string, workerId?: string) {
+export async function downloadSalesCSV(range: ReportDateRange, customFrom?: string, customTo?: string, paymentMethod?: string, workerId?: string) {
   const dateStr = formatReportDateRange(range, customFrom, customTo);
-  const data = reportService.getSalesReport(range, customFrom, customTo, paymentMethod, workerId);
+  const [data, settings] = await Promise.all([
+    reportService.getSalesReport(range, customFrom, customTo, paymentMethod, workerId),
+    settingsService.getSettings()
+  ]);
   
   const csvData = data.bills.map(b => ({
     'Bill Number': b.billNumber,
     'Date': formatDateTime(b.createdAt),
     'Customer': b.customerName || 'Walk-in',
-    'Worker ID': b.workerId,
+    'Worker': b.workerName,
     'Subtotal': formatMoneyNumber(b.subtotal),
     'Discount': formatMoneyNumber(b.discount),
     'Total': formatMoneyNumber(b.total),
@@ -19,13 +22,15 @@ export function downloadSalesCSV(range: ReportDateRange, customFrom?: string, cu
   }));
   
   const csv = Papa.unparse(csvData);
-  const settings = settingsService.getSettings();
   downloadFile(csv, `${settings.salonName.replace(/ /g, '_')}_Sales_${dateStr.replace(/ /g, '_')}.csv`);
 }
 
-export function downloadExpenseCSV(range: ReportDateRange, customFrom?: string, customTo?: string, category?: string) {
+export async function downloadExpenseCSV(range: ReportDateRange, customFrom?: string, customTo?: string, category?: string) {
   const dateStr = formatReportDateRange(range, customFrom, customTo);
-  const data = reportService.getExpenseReport(range, customFrom, customTo, category);
+  const [data, settings] = await Promise.all([
+    reportService.getExpenseReport(range, customFrom, customTo, category),
+    settingsService.getSettings()
+  ]);
   
   const csvData = data.expenses.map(e => ({
     'Date': formatDateOnly(e.expenseDate),
@@ -36,15 +41,16 @@ export function downloadExpenseCSV(range: ReportDateRange, customFrom?: string, 
   }));
   
   const csv = Papa.unparse(csvData);
-  const settings = settingsService.getSettings();
   downloadFile(csv, `${settings.salonName.replace(/ /g, '_')}_Expenses_${dateStr.replace(/ /g, '_')}.csv`);
 }
 
-export function downloadFinancialSummaryCSV(range: ReportDateRange, customFrom?: string, customTo?: string) {
+export async function downloadFinancialSummaryCSV(range: ReportDateRange, customFrom?: string, customTo?: string) {
   const dateStr = formatReportDateRange(range, customFrom, customTo);
-  const data = reportService.getFinancialSummary(range, customFrom, customTo);
+  const [data, settings] = await Promise.all([
+    reportService.getFinancialSummary(range, customFrom, customTo),
+    settingsService.getSettings()
+  ]);
   
-  // For a summary, CSV is a bit weird, but we can do key-value pairs
   const csvData = [
     { 'Metric': 'Total Sales', 'Value': formatMoneyNumber(data.totalSales) },
     { 'Metric': 'Total Expenses', 'Value': formatMoneyNumber(data.totalExpenses) },
@@ -56,7 +62,6 @@ export function downloadFinancialSummaryCSV(range: ReportDateRange, customFrom?:
   ];
   
   const csv = Papa.unparse(csvData);
-  const settings = settingsService.getSettings();
   downloadFile(csv, `${settings.salonName.replace(/ /g, '_')}_Financial_Summary_${dateStr.replace(/ /g, '_')}.csv`);
 }
 

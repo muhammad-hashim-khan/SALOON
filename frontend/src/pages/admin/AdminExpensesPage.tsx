@@ -52,8 +52,9 @@ export const AdminExpensesPage: React.FC = () => {
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const loadExpenses = () => {
-    setExpenses(expenseService.getExpenses());
+  const loadExpenses = async () => {
+    const data = await expenseService.getExpenses();
+    setExpenses(data);
   };
 
   useEffect(() => {
@@ -125,7 +126,7 @@ export const AdminExpensesPage: React.FC = () => {
     setIsDeleteOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setFormError('');
     if (!formData.date || !formData.description.trim() || !formData.amount) {
       setFormError('All fields are required.');
@@ -139,45 +140,53 @@ export const AdminExpensesPage: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    // Simulate network delay
-    setTimeout(() => {
+    try {
       if (selectedExpense) {
-        expenseService.updateExpense(selectedExpense.id, {
+        const res = await expenseService.updateExpense(selectedExpense.id, {
           category: formData.category,
           description: formData.description,
           amount: rupeesToPaise(amt),
           expenseDate: formData.date
         });
+        if (!res.success) throw new Error(res.error);
         auditService.logAction(user?.id || 'admin', user?.fullName || 'Admin', 'UPDATE_EXPENSE', 'EXPENSE', selectedExpense.id, `Updated expense: ${formData.description}`);
         toast.success('Expense updated successfully.');
       } else {
-        const newExpense = expenseService.createExpense({
+        const res = await expenseService.createExpense({
           category: formData.category,
           description: formData.description,
           amount: rupeesToPaise(amt),
           expenseDate: formData.date,
           createdBy: user?.id || 'admin'
         });
-        auditService.logAction(user?.id || 'admin', user?.fullName || 'Admin', 'CREATE_EXPENSE', 'EXPENSE', newExpense?.id || null, `Created expense: ${formData.description}`);
+        if (!res.success) throw new Error(res.error);
+        auditService.logAction(user?.id || 'admin', user?.fullName || 'Admin', 'CREATE_EXPENSE', 'EXPENSE', res.expense?.id || null, `Created expense: ${formData.description}`);
         toast.success('Expense added successfully.');
       }
-      loadExpenses();
-      setIsSubmitting(false);
+      await loadExpenses();
       setIsModalOpen(false);
-    }, 400);
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to save expense.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!selectedExpense) return;
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
       auditService.logAction(user?.id || 'admin', user?.fullName || 'Admin', 'DELETE_EXPENSE', 'EXPENSE', selectedExpense.id, `Deleted expense: ${selectedExpense.description}`);
-      expenseService.deleteExpense(selectedExpense.id);
+      const res = await expenseService.deleteExpense(selectedExpense.id);
+      if (!res.success) throw new Error(res.error);
       toast.success('Expense deleted successfully.');
-      loadExpenses();
-      setIsSubmitting(false);
+      await loadExpenses();
       setIsDeleteOpen(false);
-    }, 400);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete expense.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
