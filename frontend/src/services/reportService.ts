@@ -5,6 +5,33 @@ import { calcWorkerPerformance } from '../utils/analytics';
 
 export type ReportDateRange = 'today' | 'yesterday' | '7days' | 'month' | 'lastMonth' | 'last3Months' | 'custom';
 
+export interface AccountingReport {
+  executive: {
+    totalSales: number;
+    totalExpenses: number;
+    netCashFlow: number;
+    totalBills: number;
+    averageBill: number;
+    cashSales: number;
+    upiSales: number;
+    otherSales: number;
+  };
+  cash: {
+    openingBalance: null | number;
+    cashSales: number;
+    cashExpenses: number;
+    closingBalance: number;
+  };
+  paymentMethods: { method: string; count: number; total: number; percent: number }[];
+  expenseCategories: { category: string; count: number; total: number; percent: number }[];
+  dailyBreakdown: { date: string; bills: number; cash: number; upi: number; total: number }[];
+  workerSummary: { workerName: string; bills: number; cash: number; upi: number; total: number; avg: number }[];
+  transactions: {
+    bills: any[];
+    expenses: any[];
+  };
+}
+
 export function getDateBoundaries(range: ReportDateRange, customFrom?: string, customTo?: string): { start: number, end: number } {
   const now = new Date();
   let start = 0;
@@ -245,5 +272,149 @@ export const reportService = {
     }).sort((a, b) => a.date.localeCompare(b.date));
     
     return { points };
+  },
+
+  async getAccountingReport(range: ReportDateRange, customFrom?: string, customTo?: string) {
+    const { start, end } = getDateBoundaries(range, customFrom, customTo);
+    
+    const [allBills, allExpenses, allWorkers] = await Promise.all([
+      billingService.getBills(),
+      expenseService.getExpenses(),
+      workerService.getWorkers()
+    ]);
+    
+    const bills = allBills.filter(b => {
+      const t = new Date(b.createdAt).getTime();
+      return t >= start && t <= end;
+    });
+    
+    const expenses = allExpenses.filter(e => {
+      const t = new Date(e.expenseDate).getTime();
+      return t >= start && t <= end;
+    });
+    
+    // Sort transactions
+    bills.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    expenses.sort((a, b) => {
+      const cmp = b.expenseDate.localeCompare(a.expenseDate);
+      if (cmp !== 0) return cmp;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    let totalSales = 0;
+    let cashSales = 0;
+    let upiSales = 0;
+    const paymentMethods = new Map<string, { count: number, total: number }>();
+    
+    for (const b of bills) {
+      totalSales += b.total;
+      if (b.paymentMethod === 'CASH') cashSales += b.total;
+      else if (b.paymentMethod === 'UPI') upiSales += b.total;
+      
+      const method = b.paymentMethod || 'OTHER';
+      if (!paymentMethods.has(method)) paymentMethods.set(method, { count: 0, total: 0 });
+      paymentMethods.get(method)!.count++;
+      paymentMethods.get(method)!.total += b.total;
+    }
+    
+    let totalExpenses = 0;
+    let cashExpenses = 0;
+    const expenseCategories = new Map<string, { count: number, total: number }>();
+    
+    for (const e of expenses) {
+      totalExpenses += e.amount;
+      // Assuming all expenses are cash if not specified, since app doesn't currently track expense payment method
+      cashExpenses += e.amount; 
+      
+      const cat = e.category || 'OTHER';
+      if (!expenseCategories.has(cat)) expenseCategories.set(cat, { count: 0, total: 0 });
+      expenseCategories.get(cat)!.count++;
+      expenseCategories.get(cat)!.total += e.amount;
+    }
+
+    const netCashFlow = totalSales - totalExpenses;
+    const averageBill = bills.length > 0 ? Math.round(totalSales / bills.length) : 0;
+    
+    // Day by Day
+    const dailyMap = new Map<string, { bills: number, cash: number, upi: number, total: number }>();
+    const diffDays = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
+    
+    if (diffDays <= 366) {
+      for (let i = 0; i <= diffDays; i++) {
+        const d = new Date(start);
+        d.setDate(d.getDate() + i);
+        if (d.getTime() > end) break;
+        dailyMap.set(d.toISOString().slice(0, 10), { bills: 0, cash: 0, upi: 0, total: 0 });
+      }
+    }
+    
+    for (const b of bills) {
+      const date = b.createdAt.slice(0, 10);
+      if (!dailyMap.has(date)) dailyMap.set(date, { bills: 0, cash: 0, upi: 0, total: 0 });
+      const day = dailyMap.get(date)!;
+      day.bills++;
+      day.total += b.total;
+      if (b.paymentMethod === 'CASH') day.cash += b.total;
+      else if (b.paymentMethod === 'UPI') day.upi += b.total;
+    }
+
+    const dailyBreakdown = Array.from(dailyMap.entries()).map(([date, data]) => ({ date, ...data })).sort((a, b) => a.date.localeCompare(b.date));
+
+    // Worker Summary
+    const workerPerf = calcWorkerPerformance(bills);
+    const workerSummary = allWorkers.map(w => {
+      const found = workerPerf.find(p => p.workerId === w.id);
+      if (found) {
+        return {
+          workerName: w.fullName,
+          bills: found.totalBills,
+          cash: found.cashSales,
+          upi: found.upiSales,
+          total: found.totalSales,
+          avg: found.totalBills > 0 ? Math.round(found.totalSales / found.totalBills) : 0
+        };
+      }
+      return { workerName: w.fullName, bills: 0, cash: 0, upi: 0, total: 0, avg: 0 };
+    }).sort((a, b) => b.total - a.total);
+
+    return {
+      executive: {
+        totalSales,
+        totalExpenses,
+        netCashFlow,
+        totalBills: bills.length,
+        averageBill,
+        cashSales,
+        upiSales,
+        otherSales: totalSales - cashSales - upiSales
+      },
+      cash: {
+        openingBalance: null, // "Not Recorded"
+        cashSales,
+        cashExpenses,
+        closingBalance: cashSales - cashExpenses // Operational
+      },
+      paymentMethods: Array.from(paymentMethods.entries()).map(([method, data]) => ({
+        method,
+        count: data.count,
+        total: data.total,
+        percent: totalSales > 0 ? (data.total / totalSales) * 100 : 0
+      })).sort((a, b) => b.total - a.total),
+      expenseCategories: Array.from(expenseCategories.entries()).map(([category, data]) => ({
+        category,
+        count: data.count,
+        total: data.total,
+        percent: totalExpenses > 0 ? (data.total / totalExpenses) * 100 : 0
+      })).sort((a, b) => b.total - a.total),
+      dailyBreakdown,
+      workerSummary,
+      transactions: {
+        bills: bills.map(b => ({
+          ...b,
+          workerName: allWorkers.find(w => w.id === b.workerId)?.fullName || 'Unknown'
+        })),
+        expenses
+      }
+    };
   }
 };

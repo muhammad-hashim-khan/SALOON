@@ -11,6 +11,7 @@ import { AdminBillsPage } from '../pages/admin/AdminBillsPage';
 import { AdminWorkersPage } from '../pages/admin/AdminWorkersPage';
 import { AdminExpensesPage } from '../pages/admin/AdminExpensesPage';
 import { AdminReportsPage } from '../pages/admin/AdminReportsPage';
+import { AdminAnalyticsPage } from '../pages/admin/AdminAnalyticsPage';
 import { AdminSettingsPage } from '../pages/admin/AdminSettingsPage';
 import { WorkerBillingPage } from '../pages/worker/WorkerBillingPage';
 import { WorkerBillsPage } from '../pages/worker/WorkerBillsPage';
@@ -64,6 +65,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="workers" element={<AdminWorkersPage />} />
         <Route path="expenses" element={<AdminExpensesPage />} />
         <Route path="reports" element={<AdminReportsPage />} />
+        <Route path="analytics" element={<AdminAnalyticsPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
         <Route path="bills/:id" element={<ReceiptPage />} />
       </Route>

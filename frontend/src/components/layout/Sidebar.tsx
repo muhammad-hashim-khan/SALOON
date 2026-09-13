@@ -37,7 +37,8 @@ export const Sidebar: React.FC = () => {
     { label: 'Bills & Invoices', path: '/admin/bills', icon: Receipt },
     { label: 'Worker Accounts', path: '/admin/workers', icon: Users },
     { label: 'Expenses', path: '/admin/expenses', icon: WalletCards },
-    { label: 'Reports & Analytics', path: '/admin/reports', icon: BarChart3 },
+    { label: 'Reports', path: '/admin/reports', icon: FileSpreadsheet },
+    { label: 'Analytics', path: '/admin/analytics', icon: BarChart3 },
     { label: 'Settings', path: '/admin/settings', icon: Settings },
   ];
 
