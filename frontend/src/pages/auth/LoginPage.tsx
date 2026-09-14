@@ -13,6 +13,7 @@ export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [settings] = useState({ salonName: 'CUT&STYLE', businessName: 'SALON & SPA' });
@@ -48,6 +49,12 @@ export const LoginPage: React.FC = () => {
     }
 
     setIsSubmitting(true);
+
+    if (rememberMe) {
+      localStorage.setItem('remember_me', 'true');
+    } else {
+      localStorage.setItem('remember_me', 'false');
+    }
 
     try {
       const result = await login(email, password);
@@ -196,6 +203,19 @@ export const LoginPage: React.FC = () => {
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+          </div>
+
+          <div className="flex items-center gap-2 mt-2">
+            <input
+              id="remember-me-checkbox"
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="w-4 h-4 rounded border-white/10 bg-[#1b1d26] text-[#c5a880] focus:ring-[#c5a880] focus:ring-offset-[#1b1d26] transition-all cursor-pointer"
+            />
+            <label htmlFor="remember-me-checkbox" className="text-xs text-gray-400 cursor-pointer select-none hover:text-gray-300 transition-colors">
+              Remember me
+            </label>
           </div>
 
           <button
