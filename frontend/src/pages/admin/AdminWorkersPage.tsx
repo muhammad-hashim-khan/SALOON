@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserPlus, ShieldAlert, CheckCircle2, XCircle, ArrowLeft, Eye, X, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { workerService, WorkerRecord } from '../../services/workerService';
 import { billingService } from '../../services/billingService';
@@ -190,6 +191,7 @@ export const AdminWorkersPage: React.FC = () => {
                     <th className="px-4 py-3 font-medium">Customer</th>
                     <th className="px-4 py-3 font-medium">Payment</th>
                     <th className="px-4 py-3 font-medium text-right">Amount</th>
+                    <th className="px-4 py-3 font-medium text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -200,6 +202,15 @@ export const AdminWorkersPage: React.FC = () => {
                       <td className="px-4 py-3 text-white">{b.customerName || <span className="text-gray-500 italic">Walk-in</span>}</td>
                       <td className="px-4 py-3 text-gray-300">{b.paymentMethod}</td>
                       <td className="px-4 py-3 text-right font-mono text-white font-bold">{formatRupeesCompact(b.total)}</td>
+                      <td className="px-4 py-3 text-center">
+                        <Link 
+                          to={`/admin/bills/${b.id}`} 
+                          className="inline-flex items-center justify-center p-1.5 bg-white/5 hover:bg-[#c5a880]/20 text-gray-400 hover:text-[#c5a880] rounded-lg transition-colors"
+                          title="View Receipt"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -13,11 +13,17 @@ import {
   LogOut,
   UserCheck,
   ShieldCheck,
+  X
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { settingsService } from '../../services/settingsService';
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => {
   const { profile, role, logout } = useAuth();
   const navigate = useNavigate();
   const isAdmin = role === 'ADMIN';
@@ -51,22 +57,43 @@ export const Sidebar: React.FC = () => {
   const navItems = isAdmin ? adminNavItems : workerNavItems;
 
   return (
-    <aside className="w-64 bg-[#0d0e12] border-r border-white/10 flex flex-col justify-between shrink-0 min-h-screen select-none">
-      <div>
-        {/* Brand Header */}
-        <div className="h-16 flex items-center gap-3 px-6 border-b border-white/10 bg-[#121318]">
-          <div className="w-8 h-8 rounded-lg bg-[#c5a880] text-black flex items-center justify-center font-bold shadow-md shadow-[#c5a880]/20">
-            <Scissors className="w-4 h-4 transform -rotate-45" />
+    <>
+      {/* Mobile Backdrop */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
+          onClick={onClose}
+        />
+      )}
+
+      {/* Sidebar Container */}
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-[#0d0e12] border-r border-white/10 flex flex-col justify-between shrink-0 min-h-screen select-none transition-transform duration-300 ease-in-out
+        md:relative md:translate-x-0
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        <div>
+          {/* Brand Header */}
+          <div className="h-16 flex items-center justify-between px-6 border-b border-white/10 bg-[#121318]">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-[#c5a880] text-black flex items-center justify-center font-bold shadow-md shadow-[#c5a880]/20">
+                <Scissors className="w-4 h-4 transform -rotate-45" />
+              </div>
+              <div>
+                <span className="font-bold tracking-wider text-sm text-white block leading-none">
+                  {settings.salonName.substring(0, 3)}<span className="text-[#c5a880]">&</span>{settings.salonName.substring(4) || 'STYLE'}
+                </span>
+                <span className="text-[10px] text-gray-400 tracking-widest uppercase font-medium mt-0.5 block">
+                  {settings.businessName}
+                </span>
+              </div>
+            </div>
+            {onClose && (
+              <button onClick={onClose} className="p-1 -mr-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 md:hidden">
+                <X className="w-5 h-5" />
+              </button>
+            )}
           </div>
-          <div>
-            <span className="font-bold tracking-wider text-sm text-white block leading-none">
-              {settings.salonName.substring(0, 3)}<span className="text-[#c5a880]">&</span>{settings.salonName.substring(4) || 'STYLE'}
-            </span>
-            <span className="text-[10px] text-gray-400 tracking-widest uppercase font-medium mt-0.5 block">
-              {settings.businessName}
-            </span>
-          </div>
-        </div>
 
         {/* Role Badge */}
         <div className="px-6 py-3 border-b border-white/5 bg-[#101116]">
@@ -141,5 +168,6 @@ export const Sidebar: React.FC = () => {
         </div>
       </div>
     </aside>
+    </>
   );
 };

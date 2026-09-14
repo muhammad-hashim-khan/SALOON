@@ -282,7 +282,8 @@ export const AdminReportsPage: React.FC = () => {
                 <h3 className="text-lg font-black uppercase tracking-wider border-b-2 border-gray-800 pb-2 mb-4 flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5" /> Executive Summary
                 </h3>
-                <div className="grid grid-cols-3 gap-6 mb-6">
+                {/* EXECUTIVE KPIs */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 print:grid-cols-3 gap-4 mb-6">
                   <div className="bg-gray-50 p-4 border border-gray-200 rounded-lg">
                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Total Sales</p>
                     <p className="text-2xl font-black font-mono">{formatRupeesCompact(reportData.executive.totalSales)}</p>
@@ -296,7 +297,7 @@ export const AdminReportsPage: React.FC = () => {
                     <p className="text-2xl font-black font-mono text-emerald-700">{formatRupeesCompact(reportData.executive.netCashFlow)}</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 print:grid-cols-4 gap-4">
                   <div className="border border-gray-200 p-3 rounded-lg"><p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Bills</p><p className="text-lg font-bold">{reportData.executive.totalBills}</p></div>
                   <div className="border border-gray-200 p-3 rounded-lg"><p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Avg Bill Value</p><p className="text-lg font-bold font-mono">{formatRupeesCompact(reportData.executive.averageBill)}</p></div>
                   <div className="border border-gray-200 p-3 rounded-lg"><p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Cash Sales</p><p className="text-lg font-bold font-mono text-emerald-600">{formatRupeesCompact(reportData.executive.cashSales)}</p></div>
@@ -305,7 +306,7 @@ export const AdminReportsPage: React.FC = () => {
               </div>
 
               {/* MONEY FLOW & CASH SUMMARY */}
-              <div className="grid grid-cols-2 gap-8 mb-10 print:break-inside-avoid">
+              <div className="grid grid-cols-1 md:grid-cols-2 print:grid-cols-2 gap-8 mb-10 print:break-inside-avoid">
                 <div>
                   <h3 className="text-sm font-black uppercase tracking-wider border-b-2 border-gray-800 pb-2 mb-4 flex items-center gap-2">
                     <DollarSign className="w-4 h-4" /> Money Flow Summary
